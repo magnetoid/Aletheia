@@ -1,0 +1,5 @@
+{
+  "name": "Aletheia AI - Anticorruption Intelligence",
+  "description": "A deep-research AI platform that analyzes public data, news, and financial records to identify potential corruption, conflicts of interest, and illicit affairs using Gemini 3 Pro with real-time grounding.",
+  "requestFramePermissions": []
+}
