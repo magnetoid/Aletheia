@@ -38,8 +38,8 @@ const TypologyRadar: React.FC<TypologyRadarProps> = ({ typology }) => {
   const radarColor = getDominantColor();
 
   return (
-    <div className="relative h-64 w-full flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800/50 p-4">
-      <h3 className="text-slate-400 text-sm uppercase tracking-widest mb-1 absolute top-4 left-4">Corruption Profile</h3>
+    <div className="h-full w-full flex flex-col items-center justify-center relative">
+      <h3 className="text-slate-400 text-xs uppercase tracking-widest mb-1 absolute top-0 left-0">Corruption Profile</h3>
       
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart cx="50%" cy="55%" outerRadius="70%" data={data}>
@@ -55,7 +55,7 @@ const TypologyRadar: React.FC<TypologyRadarProps> = ({ typology }) => {
             fillOpacity={0.4}
           />
           <Tooltip 
-             contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#e2e8f0' }}
+             contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#e2e8f0', borderRadius: '0.5rem' }}
              itemStyle={{ color: radarColor }}
           />
         </RadarChart>

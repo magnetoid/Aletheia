@@ -68,7 +68,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ events, onAddEvent, onDelet
              </div>
              <div>
                 <h3 className="text-lg font-bold text-white">{t.timeline.title}</h3>
-                <p className="text-slate-400 text-sm">Chronological record of events</p>
+                <p className="text-slate-400 text-sm">{t.globalTimeline.subtitle}</p>
              </div>
           </div>
           
@@ -81,14 +81,14 @@ const TimelineView: React.FC<TimelineViewProps> = ({ events, onAddEvent, onDelet
             }`}
           >
             {isAdding ? <X size={16} /> : <Plus size={16} />}
-            {isAdding ? t.entities.cancel : "Add Event"}
+            {isAdding ? t.entities.cancel : t.timelineView.add}
           </button>
         </div>
 
         {isAdding && (
           <form onSubmit={handleSubmit} className="mb-6 bg-slate-900/80 p-4 rounded-xl border border-emerald-500/30 animate-fade-in-up">
             <h4 className="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Plus size={12} /> New Timeline Entry
+                <Plus size={12} /> {t.timelineView.new}
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="space-y-1">
@@ -168,7 +168,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ events, onAddEvent, onDelet
                 type="submit" 
                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-medium transition-colors"
             >
-                Save Timeline Event
+                {t.timelineView.save}
             </button>
           </form>
         )}
@@ -176,7 +176,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ events, onAddEvent, onDelet
         <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
             {events.length === 0 ? (
                  <div className="text-center py-12 text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
-                    <p>No events recorded.</p>
+                    <p>{t.globalTimeline.empty}</p>
                  </div>
             ) : (
                 events.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((event, i) => (
@@ -188,28 +188,28 @@ const TimelineView: React.FC<TimelineViewProps> = ({ events, onAddEvent, onDelet
                             <div className={`w-1.5 h-1.5 rounded-full ${getImpactColor(event.impactLevel)}`} title={`Impact: ${event.impactLevel}/10`}></div>
                         </div>
                         
-                        <div className="flex-1 border-l border-slate-800 pl-4">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className="text-white font-bold text-sm">{event.title}</h4>
-                                        <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 uppercase">
+                        <div className="flex-1 border-l border-slate-800 pl-4 min-w-0">
+                            <div className="flex justify-between items-start gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                        <h4 className="text-white font-bold text-sm break-words">{event.title}</h4>
+                                        <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 uppercase whitespace-nowrap">
                                             {getTypeLabel(event.type)}
                                         </span>
                                     </div>
                                     {event.relatedLaw && (
-                                        <span className="inline-flex items-center gap-1 text-[10px] bg-red-950/30 text-red-300 border border-red-900/30 px-2 py-0.5 rounded mb-2">
-                                            <Gavel size={10} />
+                                        <span className="inline-flex items-center gap-1 text-[10px] bg-red-950/30 text-red-300 border border-red-900/30 px-2 py-0.5 rounded mb-2 break-words">
+                                            <Gavel size={10} className="flex-shrink-0" />
                                             VIOLATION: {event.relatedLaw}
                                         </span>
                                     )}
-                                    <p className="text-slate-400 text-xs leading-relaxed">
+                                    <p className="text-slate-400 text-xs leading-relaxed break-words">
                                         {event.description}
                                     </p>
                                 </div>
                                 <button 
                                     onClick={() => onDeleteEvent(i)}
-                                    className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                                    className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 flex-shrink-0"
                                     title="Delete Event"
                                 >
                                     <Trash2 size={14} />

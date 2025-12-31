@@ -1,19 +1,21 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { Connection, Entity } from '../types';
-import { X, ZoomIn, Info } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCcw, Info, Network } from 'lucide-react';
 import { useLanguage } from '../languageContext';
 
 interface NetworkGraphProps {
   entities: Entity[];
   connections: Connection[];
   focusEntityName?: string;
-  onClose: () => void;
+  onClose?: () => void;
+  mode?: 'modal' | 'embedded'; // New prop to control display mode
 }
 
-const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focusEntityName, onClose }) => {
+const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focusEntityName, onClose, mode = 'modal' }) => {
   const { t } = useLanguage();
   const svgRef = useRef<SVGSVGElement>(null);
+  const zoomBehavior = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
   useEffect(() => {
     if (!svgRef.current || entities.length === 0) return;
@@ -25,7 +27,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
     d3.select(svgRef.current).selectAll("*").remove();
 
     // Prepare data
-    // Map entities to nodes
     const nodes = entities.map(e => ({
       id: e.name,
       group: e.suspicionLevel,
@@ -33,8 +34,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
       ...e
     }));
 
-    // Map connections to links
-    // Filter connections to ensure both source and target exist in nodes
     const nodeIds = new Set(nodes.map(n => n.id));
     const links = connections
       .filter(c => nodeIds.has(c.from) && nodeIds.has(c.to))
@@ -44,17 +43,30 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
         type: c.type
       }));
 
+    // Setup SVG
+    const svg = d3.select(svgRef.current);
+    
+    // Add container for zoom
+    const container = svg.append("g");
+
+    // Initialize Zoom
+    zoomBehavior.current = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 4])
+      .on("zoom", (event) => {
+        container.attr("transform", event.transform);
+      });
+
+    svg.call(zoomBehavior.current);
+
     // Simulation setup
     const simulation = d3.forceSimulation(nodes as any)
       .force("link", d3.forceLink(links).id((d: any) => d.id).distance(180))
       .force("charge", d3.forceManyBody().strength(-500))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collide", d3.forceCollide().radius(50));
-
-    const svg = d3.select(svgRef.current);
     
     // Add arrow markers
-    svg.append('defs').selectAll('marker')
+    container.append('defs').selectAll('marker')
       .data(['end'])
       .enter().append('marker')
       .attr('id', 'arrow')
@@ -69,7 +81,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
       .attr('fill', '#94a3b8');
 
     // Draw lines
-    const link = svg.append("g")
+    const link = container.append("g")
       .attr("stroke", "#475569")
       .attr("stroke-opacity", 0.6)
       .selectAll("line")
@@ -79,7 +91,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
       .attr("marker-end", "url(#arrow)");
 
     // Draw link labels
-    const linkLabel = svg.append("g")
+    const linkLabel = container.append("g")
       .selectAll("text")
       .data(links)
       .join("text")
@@ -90,7 +102,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
       .text((d: any) => d.type);
 
     // Draw nodes
-    const node = svg.append("g")
+    const node = container.append("g")
       .selectAll("g")
       .data(nodes)
       .join("g")
@@ -99,16 +111,21 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
         .on("drag", dragged)
         .on("end", dragended) as any);
 
-    // Node circles - Color by TYPE instead of risk for the fill, use stroke for risk
+    // Node circles - Color by TYPE
     node.append("circle")
       .attr("r", (d: any) => d.id === focusEntityName ? 28 : 20)
       .attr("fill", (d: any) => {
          switch(d.type) {
              case 'company': return '#312e81'; // Indigo 900
+             case 'state_owned_enterprise': return '#164e63'; // Cyan 900
+             case 'public_official': return '#581c87'; // Purple 900
              case 'corruption_scheme': return '#450a0a'; // Red 950
              case 'event': return '#451a03'; // Amber 950
              case 'person': return '#0f172a'; // Slate 900
              case 'organization': return '#0c4a6e'; // Sky 900
+             case 'political_party': return '#7c2d12'; // Orange 900
+             case 'institution': return '#334155'; // Slate 700
+             case 'ngo': return '#064e3b'; // Emerald 900
              default: return '#1e293b';
          }
       })
@@ -122,21 +139,25 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
       .attr("stroke-width", (d: any) => d.id === focusEntityName ? 3 : 2)
       .attr("class", "cursor-grab active:cursor-grabbing shadow-lg");
 
-    // Node Icons (using text/unicode as proxy for icon in D3)
+    // Node Icons
     node.append("text")
       .attr("dy", 5)
       .attr("text-anchor", "middle")
       .attr("fill", "#e2e8f0")
       .attr("font-size", "12px")
-      .attr("font-family", "lucide") // Assuming lucide font is available or fallbacks
       .style("pointer-events", "none")
       .text((d: any) => {
          switch(d.type) {
              case 'company': return '🏢';
+             case 'state_owned_enterprise': return '🏭';
+             case 'public_official': return '👔';
              case 'corruption_scheme': return '☢️';
              case 'event': return '📅';
              case 'person': return '👤';
-             case 'organization': return '🏛️';
+             case 'organization': return '👥';
+             case 'political_party': return '🚩';
+             case 'institution': return '🏛️';
+             case 'ngo': return '🤝';
              default: return '🔗';
          }
       });
@@ -184,36 +205,70 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
       d.fy = null;
     }
 
+    // Set initial zoom if focusing on an entity
+    if (focusEntityName) {
+         svg.transition().duration(750).call(zoomBehavior.current.transform, d3.zoomIdentity);
+    }
+
     return () => {
       simulation.stop();
     };
   }, [entities, connections, focusEntityName]);
 
+  const handleZoomIn = () => {
+    if (svgRef.current && zoomBehavior.current) {
+        d3.select(svgRef.current).transition().call(zoomBehavior.current.scaleBy, 1.2);
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (svgRef.current && zoomBehavior.current) {
+        d3.select(svgRef.current).transition().call(zoomBehavior.current.scaleBy, 0.8);
+    }
+  };
+
+  const handleResetZoom = () => {
+    if (svgRef.current && zoomBehavior.current) {
+        d3.select(svgRef.current).transition().call(zoomBehavior.current.transform, d3.zoomIdentity);
+    }
+  };
+
+  // Styles based on mode
+  const containerClasses = mode === 'modal' 
+    ? "fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+    : "w-full h-[calc(100vh-80px)] md:h-[calc(100vh-64px)] p-4 animate-fade-in";
+
+  const wrapperClasses = mode === 'modal'
+    ? "bg-[#0f172a] w-full h-full md:max-w-5xl md:h-[80vh] md:rounded-2xl border-0 md:border border-slate-700 shadow-2xl flex flex-col overflow-hidden relative"
+    : "bg-[#0b1120] w-full h-full rounded-xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden relative";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[#0f172a] w-full max-w-5xl h-[80vh] rounded-2xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden relative">
+    <div className={containerClasses}>
+      <div className={wrapperClasses}>
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 z-10">
+        <div className={`p-4 border-b border-slate-800 flex justify-between items-center z-10 ${mode === 'modal' ? 'bg-slate-900/50' : 'bg-slate-900'}`}>
           <div className="flex items-center gap-3">
              <div className="p-2 bg-sky-500/10 rounded-lg border border-sky-500/20">
-                <ZoomIn className="w-5 h-5 text-sky-400" />
+                {mode === 'modal' ? <ZoomIn className="w-5 h-5 text-sky-400" /> : <Network className="w-5 h-5 text-sky-400" />}
              </div>
              <div>
                 <h3 className="text-white font-bold text-lg">{t.network.modalTitle}</h3>
-                <p className="text-slate-400 text-xs">{t.network.drag} • {t.network.visualizing} {entities.length} entities & {connections.length} connections</p>
+                <p className="text-slate-400 text-xs hidden sm:block">{t.network.drag} • {t.network.visualizing} {entities.length} entities & {connections.length} connections</p>
              </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg hover:bg-slate-700">
-            <X size={20} />
-          </button>
+          {mode === 'modal' && onClose && (
+            <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg hover:bg-slate-700">
+              <X size={20} />
+            </button>
+          )}
         </div>
 
         {/* Canvas */}
         <div className="flex-1 relative bg-[#0b1120] overflow-hidden">
             <svg ref={svgRef} className="w-full h-full cursor-move"></svg>
             
-            {/* Legend */}
-            <div className="absolute bottom-4 left-4 bg-slate-900/80 border border-slate-800 p-3 rounded-lg backdrop-blur-sm pointer-events-none flex flex-col gap-4">
+            {/* Legend - Hidden on very small screens, shown as overlay on larger */}
+            <div className="hidden sm:flex absolute bottom-4 left-4 bg-slate-900/80 border border-slate-800 p-3 rounded-lg backdrop-blur-sm pointer-events-none flex-col gap-4">
                 <div>
                   <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Node Types</h4>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
@@ -221,10 +276,19 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
                           <span className="text-xs">👤</span> <span className="text-[10px] text-slate-300">Person</span>
                       </div>
                       <div className="flex items-center gap-2">
+                          <span className="text-xs">👔</span> <span className="text-[10px] text-slate-300">Official</span>
+                      </div>
+                      <div className="flex items-center gap-2">
                           <span className="text-xs">🏢</span> <span className="text-[10px] text-slate-300">Company</span>
                       </div>
                       <div className="flex items-center gap-2">
-                          <span className="text-xs">🏛️</span> <span className="text-[10px] text-slate-300">Org</span>
+                          <span className="text-xs">🏭</span> <span className="text-[10px] text-slate-300">State Ent.</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <span className="text-xs">🏛️</span> <span className="text-[10px] text-slate-300">Institution</span>
+                      </div>
+                       <div className="flex items-center gap-2">
+                          <span className="text-xs">🚩</span> <span className="text-[10px] text-slate-300">Party</span>
                       </div>
                       <div className="flex items-center gap-2">
                           <span className="text-xs">☢️</span> <span className="text-[10px] text-slate-300">Scheme</span>
@@ -247,8 +311,21 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ entities, connections, focu
                 </div>
             </div>
 
+            {/* Zoom Controls */}
+            <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+                 <button onClick={handleZoomIn} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg border border-slate-700 shadow-lg transition-colors" title="Zoom In">
+                     <ZoomIn size={20} />
+                 </button>
+                 <button onClick={handleZoomOut} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg border border-slate-700 shadow-lg transition-colors" title="Zoom Out">
+                     <ZoomOut size={20} />
+                 </button>
+                 <button onClick={handleResetZoom} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg border border-slate-700 shadow-lg transition-colors" title="Reset View">
+                     <RotateCcw size={20} />
+                 </button>
+            </div>
+
             {focusEntityName && (
-               <div className="absolute top-4 right-4 bg-sky-900/20 border border-sky-500/30 p-3 rounded-lg max-w-xs backdrop-blur-sm">
+               <div className="absolute top-4 right-4 bg-sky-900/20 border border-sky-500/30 p-3 rounded-lg max-w-xs backdrop-blur-sm pointer-events-none">
                   <div className="flex items-start gap-2">
                      <Info className="w-4 h-4 text-sky-400 mt-0.5" />
                      <div>

@@ -113,7 +113,7 @@ const PropertyRegistry: React.FC<PropertyRegistryProps> = ({ properties, onAddPr
       {isAdding && (
           <form onSubmit={handleSubmit} className="bg-slate-900/80 p-6 rounded-xl border border-emerald-500/30 animate-fade-in-up">
             <h4 className="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Plus size={12} /> New Property Record
+                <Plus size={12} /> {t.propertyRegistry.new}
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="space-y-1">
@@ -204,7 +204,7 @@ const PropertyRegistry: React.FC<PropertyRegistryProps> = ({ properties, onAddPr
                 type="submit" 
                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-medium transition-colors"
             >
-                Save Property Record
+                {t.propertyRegistry.save}
             </button>
           </form>
       )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AnalysisResult, ChatMessage } from '../types';
 import { createInvestigationChat } from '../services/geminiService';
 import { Chat, GenerateContentResponse } from '@google/genai';
-import { Send, Bot, User, Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Loader2, Copy, Check } from 'lucide-react';
 import { useLanguage } from '../languageContext';
 
 interface AiAssistantProps {
@@ -14,6 +14,8 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ report }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  
   const chatSessionRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -82,52 +84,103 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ report }) => {
     }
   };
 
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Simple formatter to handle bold text (e.g. **text**)
+  const renderFormattedText = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={index} className="text-emerald-300 font-bold">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
   const suggestedQuestions = language === 'sr' 
     ? ["Objasni skor rizika", "Napiši zahtev tužilaštvu", "Ko su povezana lica?"]
     : ["Explain the risk score", "Draft a prosecutor request", "Who are the connected entities?"];
 
   return (
-    <div className="flex flex-col h-[600px] bg-slate-900/50 rounded-xl border border-slate-700 overflow-hidden animate-fade-in">
+    <div className="flex flex-col h-[600px] bg-[#0b1120] rounded-xl border border-slate-700 overflow-hidden animate-fade-in shadow-2xl relative">
+      {/* Background Grid Effect */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(30,41,59,0.3)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.3)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none z-0"></div>
+
       {/* Header */}
-      <div className="p-4 border-b border-slate-700 bg-slate-800/80 flex items-center gap-3">
-         <div className="bg-sky-500/10 p-2 rounded-lg border border-sky-500/20">
-            <Sparkles className="text-sky-400 w-5 h-5" />
+      <div className="relative z-10 p-4 border-b border-slate-700 bg-slate-900/80 backdrop-blur-md flex items-center justify-between">
+         <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-sky-500 to-indigo-600 p-2 rounded-lg shadow-lg shadow-sky-500/20">
+                <Sparkles className="text-white w-5 h-5" />
+            </div>
+            <div>
+                <h3 className="text-white font-bold tracking-wide">{t.assistant.title}</h3>
+                <p className="text-slate-400 text-[10px] uppercase tracking-wider">{t.assistant.subtitle}</p>
+            </div>
          </div>
-         <div>
-            <h3 className="text-white font-bold">{t.assistant.title}</h3>
-            <p className="text-slate-400 text-xs">{t.assistant.subtitle}</p>
+         <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[10px] text-emerald-400 font-mono">ONLINE</span>
          </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="relative z-10 flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
         {messages.map((msg) => (
           <div 
             key={msg.id} 
-            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+            className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
           >
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-              msg.role === 'user' ? 'bg-indigo-600' : 'bg-emerald-600'
-            }`}>
-              {msg.role === 'user' ? <User size={16} className="text-white" /> : <Bot size={16} className="text-white" />}
-            </div>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+            {/* Avatar */}
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg ${
               msg.role === 'user' 
-                ? 'bg-indigo-600 text-white rounded-tr-none' 
-                : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-none'
+                ? 'bg-gradient-to-br from-indigo-500 to-indigo-700' 
+                : 'bg-gradient-to-br from-emerald-600 to-teal-800'
             }`}>
-              {msg.content}
+              {msg.role === 'user' ? <User size={20} className="text-white" /> : <Bot size={20} className="text-white" />}
+            </div>
+
+            {/* Message Bubble */}
+            <div className={`relative max-w-[85%] rounded-2xl p-5 text-sm leading-7 shadow-xl ${
+              msg.role === 'user' 
+                ? 'bg-indigo-600 text-white rounded-tr-none border border-indigo-500/50' 
+                : 'bg-slate-800/90 text-slate-200 border border-slate-700 rounded-tl-none backdrop-blur-sm'
+            }`}>
+              <div className="whitespace-pre-wrap font-sans">
+                {msg.role === 'model' ? renderFormattedText(msg.content) : msg.content}
+              </div>
+
+              {/* Timestamp & Actions */}
+              <div className={`mt-2 flex items-center gap-3 opacity-60 text-[10px] uppercase font-bold tracking-wider ${
+                  msg.role === 'user' ? 'justify-end text-indigo-200' : 'justify-start text-slate-500'
+              }`}>
+                  <span>{new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                  {msg.role === 'model' && (
+                      <button 
+                        onClick={() => copyToClipboard(msg.content, msg.id)}
+                        className="hover:text-emerald-400 transition-colors flex items-center gap-1"
+                        title="Copy to clipboard"
+                      >
+                         {copiedId === msg.id ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                         {copiedId === msg.id ? 'Copied' : 'Copy'}
+                      </button>
+                  )}
+              </div>
             </div>
           </div>
         ))}
+
         {isTyping && (
-           <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0">
-                 <Bot size={16} className="text-white" />
+           <div className="flex gap-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center flex-shrink-0 shadow-lg">
+                 <Bot size={20} className="text-white" />
               </div>
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-none px-4 py-3 flex items-center gap-2">
-                 <Loader2 size={16} className="animate-spin text-slate-400" />
-                 <span className="text-slate-400 text-xs italic">Aletheia is thinking...</span>
+              <div className="bg-slate-800/50 border border-slate-700 rounded-2xl rounded-tl-none px-6 py-4 flex items-center gap-3 shadow-inner">
+                 <Loader2 size={18} className="animate-spin text-emerald-400" />
+                 <span className="text-emerald-400 text-xs font-mono tracking-widest uppercase animate-pulse">Processing...</span>
               </div>
            </div>
         )}
@@ -135,38 +188,43 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ report }) => {
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-slate-700 bg-slate-800/30">
+      <div className="relative z-10 p-4 border-t border-slate-700 bg-slate-900/90 backdrop-blur-md">
         {messages.length < 3 && (
-           <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
-              <span className="text-xs text-slate-500 uppercase font-bold self-center mr-1">{t.assistant.suggested}</span>
+           <div className="flex gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+              <span className="text-[10px] text-slate-500 uppercase font-bold self-center mr-2 tracking-widest">{t.assistant.suggested}</span>
               {suggestedQuestions.map((q, idx) => (
                  <button 
                    key={idx}
                    onClick={() => handleSendMessage(q)}
-                   className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sky-400 text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-colors"
+                   className="bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-sky-500 text-slate-300 hover:text-white text-xs px-4 py-2 rounded-full whitespace-nowrap transition-all shadow-sm"
                  >
                    {q}
                  </button>
               ))}
            </div>
         )}
-        <div className="relative">
-          <input
-            type="text"
+        <div className="relative group">
+          <textarea
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={t.assistant.placeholder}
             disabled={isTyping}
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-4 pr-12 py-3 text-white placeholder-slate-500 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 outline-none disabled:opacity-50"
+            rows={1}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-14 py-4 text-white placeholder-slate-600 focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 outline-none disabled:opacity-50 resize-none overflow-hidden transition-all shadow-inner font-sans"
+            style={{ minHeight: '56px' }}
           />
           <button 
             onClick={() => handleSendMessage(inputValue)}
             disabled={!inputValue.trim() || isTyping}
-            className="absolute right-2 top-2 p-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="absolute right-2 top-2 bottom-2 aspect-square bg-sky-600 hover:bg-sky-500 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-sky-900/20 flex items-center justify-center group-focus-within:bg-sky-500"
           >
-            <Send size={16} />
+            <Send size={18} className={isTyping ? 'opacity-0' : 'opacity-100'} />
+            {isTyping && <Loader2 size={18} className="absolute animate-spin" />}
           </button>
+        </div>
+        <div className="text-center mt-2">
+            <p className="text-[9px] text-slate-600 uppercase tracking-widest">Aletheia AI generated content may require independent verification.</p>
         </div>
       </div>
     </div>

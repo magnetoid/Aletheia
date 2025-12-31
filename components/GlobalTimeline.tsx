@@ -1,6 +1,7 @@
 import React from 'react';
 import { SavedInvestigation, TimelineEvent } from '../types';
 import { Clock, Calendar } from 'lucide-react';
+import { useLanguage } from '../languageContext';
 
 interface GlobalTimelineProps {
   events: (TimelineEvent & { caseRef: SavedInvestigation })[];
@@ -8,6 +9,7 @@ interface GlobalTimelineProps {
 }
 
 const GlobalTimeline: React.FC<GlobalTimelineProps> = React.memo(({ events, onLoadCase }) => {
+  const { t } = useLanguage();
   return (
     <div className="max-w-[1600px] mx-auto px-4 py-8 animate-fade-in">
         <div className="flex items-center gap-3 mb-8">
@@ -15,14 +17,14 @@ const GlobalTimeline: React.FC<GlobalTimelineProps> = React.memo(({ events, onLo
                 <Clock className="text-orange-400 w-8 h-8" />
             </div>
             <div>
-                <h1 className="text-3xl font-bold text-white">Global Event Timeline</h1>
-                <p className="text-slate-400">Master chronological record across all investigations</p>
+                <h1 className="text-3xl font-bold text-white">{t.globalTimeline.title}</h1>
+                <p className="text-slate-400">{t.globalTimeline.subtitle}</p>
             </div>
         </div>
 
         <div className="relative border-l-2 border-slate-800 ml-4 space-y-8">
             {events.length === 0 ? (
-                 <div className="pl-8 text-slate-500 italic">No timeline events recorded in saved cases.</div>
+                 <div className="pl-8 text-slate-500 italic">{t.globalTimeline.empty}</div>
             ) : (
                 events.map((event, idx) => (
                     <div key={idx} className="relative pl-8 group">

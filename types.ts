@@ -22,7 +22,18 @@ export interface EntityDocument {
   date?: string;
 }
 
-export type EntityType = 'person' | 'company' | 'organization' | 'event' | 'corruption_scheme' | 'other';
+export type EntityType = 
+  | 'person' 
+  | 'public_official' 
+  | 'company' 
+  | 'state_owned_enterprise' 
+  | 'institution' 
+  | 'political_party' 
+  | 'ngo' 
+  | 'organization'
+  | 'event' 
+  | 'corruption_scheme' 
+  | 'other';
 
 export interface Entity {
   name: string;

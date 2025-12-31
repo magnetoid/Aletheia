@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Entity, Connection, EntityDocument, EntityType } from '../types';
-import { AlertTriangle, User, Share2, Plus, Trash2, X, FileText, Calendar, Clock, Hash, ExternalLink, Building2, ShieldAlert, AlertOctagon, NotebookPen, Gavel, Link, Layers, ChevronDown, ChevronRight, Search, Landmark, Fingerprint, FileWarning, Flag, MapPin } from 'lucide-react';
+import { AlertTriangle, User, Share2, Plus, Trash2, X, FileText, Calendar, Clock, Hash, ExternalLink, Building2, ShieldAlert, AlertOctagon, NotebookPen, Gavel, Link, Layers, ChevronDown, ChevronRight, Search, Landmark, Fingerprint, FileWarning, Flag, MapPin, Factory, UserCheck, Users, Flame, ArrowRight, List, Network } from 'lucide-react';
 import NetworkGraph from './NetworkGraph';
 import { useLanguage } from '../languageContext';
 
@@ -19,6 +19,9 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
   const [showGraph, setShowGraph] = useState(false);
   const [viewingEntity, setViewingEntity] = useState<Entity | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  
+  // View State (Entities vs Connections List)
+  const [activeView, setActiveView] = useState<'entities' | 'connections'>('entities');
   
   // Grouping State
   const [groupBy, setGroupBy] = useState<'none' | 'role' | 'suspicionLevel' | 'type'>('type');
@@ -117,6 +120,16 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
     }
   };
 
+  const handleUpdateMetadata = (key: string, value: string) => {
+    if (viewingEntity && onUpdateEntity) {
+        const currentMetadata = viewingEntity.metadata || {};
+        const newMetadata = { ...currentMetadata, [key]: value };
+        const updatedEntity = { ...viewingEntity, metadata: newMetadata };
+        setViewingEntity(updatedEntity);
+        onUpdateEntity(updatedEntity);
+    }
+  };
+
   const getRiskLabel = (level: string) => {
     return t.enums[level as keyof typeof t.enums] || level;
   };
@@ -124,9 +137,11 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
   const getRiskStyles = (level: string) => {
     switch (level) {
       case 'critical':
-        return 'bg-red-950/40 text-red-400 border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse';
+        // Deep red/burgundy with intense red border and shadow
+        return 'bg-[#450a0a] text-red-200 border border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)] font-bold';
       case 'high':
-        return 'bg-orange-950/40 text-orange-400 border border-orange-500/40 shadow-[0_0_6px_rgba(249,115,22,0.1)]';
+        // Bright orange, solid border, no heavy shadow
+        return 'bg-orange-950/60 text-orange-200 border border-orange-500/60';
       case 'medium':
         return 'bg-yellow-950/30 text-yellow-400 border border-yellow-500/30';
       default:
@@ -136,8 +151,8 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
 
   const getRiskIcon = (level: string, size: number = 14) => {
       switch (level) {
-          case 'critical': return <AlertOctagon size={size} className="animate-bounce" />;
-          case 'high': return <ShieldAlert size={size} />;
+          case 'critical': return <Flame size={size} className="text-red-500 animate-pulse" />;
+          case 'high': return <AlertOctagon size={size} className="text-orange-500" />;
           case 'medium': return <AlertTriangle size={size} />;
           default: return <User size={size} />;
       }
@@ -146,8 +161,13 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
   const getEntityIcon = (type: EntityType | undefined, size: number = 16) => {
       switch(type) {
           case 'person': return <User size={size} />;
+          case 'public_official': return <UserCheck size={size} />;
           case 'company': return <Building2 size={size} />;
-          case 'organization': return <Landmark size={size} />;
+          case 'state_owned_enterprise': return <Factory size={size} />;
+          case 'organization': return <Users size={size} />;
+          case 'political_party': return <Flag size={size} />;
+          case 'institution': return <Landmark size={size} />;
+          case 'ngo': return <Share2 size={size} />;
           case 'event': return <Calendar size={size} />;
           case 'corruption_scheme': return <Fingerprint size={size} />;
           default: return <Share2 size={size} />;
@@ -157,9 +177,14 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
   const getEntityIconBg = (type: EntityType | undefined) => {
       switch(type) {
           case 'company': return 'bg-indigo-900/30 text-indigo-400';
+          case 'state_owned_enterprise': return 'bg-cyan-900/30 text-cyan-400';
+          case 'public_official': return 'bg-purple-900/30 text-purple-400';
+          case 'institution': return 'bg-slate-700 text-slate-300';
           case 'corruption_scheme': return 'bg-red-900/30 text-red-400';
           case 'event': return 'bg-amber-900/30 text-amber-400';
+          case 'political_party': return 'bg-orange-900/30 text-orange-400';
           case 'organization': return 'bg-sky-900/30 text-sky-400';
+          case 'ngo': return 'bg-emerald-900/30 text-emerald-400';
           default: return 'bg-slate-700 text-slate-300';
       }
   };
@@ -196,38 +221,46 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
   const renderEntityCard = (entity: Entity, idx: number) => (
     <div 
       key={`${entity.name}-${idx}`} 
-      className={`p-3 rounded-lg border transition-all group relative cursor-pointer ${
-        entity.suspicionLevel === 'critical' ? 'bg-red-950/10 border-red-900/30 hover:bg-red-950/20' :
-        entity.suspicionLevel === 'high' ? 'bg-slate-900/50 border-orange-900/20 hover:bg-slate-800/80' :
+      className={`p-3 rounded-lg border transition-all duration-300 group relative cursor-pointer ${
+        entity.suspicionLevel === 'critical' 
+            ? 'bg-gradient-to-br from-red-950/40 to-slate-900/80 border-red-500/60 shadow-[0_0_15px_rgba(220,38,38,0.15)] hover:bg-red-900/20 hover:border-red-400 hover:shadow-[0_0_20px_rgba(220,38,38,0.3)]' :
+        entity.suspicionLevel === 'high' 
+            ? 'bg-slate-900/60 border-orange-500/40 hover:bg-slate-800/80 hover:border-orange-400' :
         'bg-slate-900/50 border-slate-800 hover:border-sky-500/50 hover:bg-slate-800/80'
       }`}
       onClick={() => handleEntityClick(entity)}
     >
-      <div className="flex justify-between items-start">
-        <div className="flex items-center gap-2">
-          <div className={`p-2 rounded-full transition-colors ${getEntityIconBg(entity.type)}`}>
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className={`p-2 rounded-full transition-colors flex-shrink-0 ${getEntityIconBg(entity.type)}`}>
              {getEntityIcon(entity.type)}
           </div>
-          <div>
-            <h4 className={`font-medium text-sm transition-colors ${
-                 entity.suspicionLevel === 'critical' ? 'text-red-200' :
-                 entity.suspicionLevel === 'high' ? 'text-orange-200' :
+          <div className="min-w-0 flex-1">
+            <h4 className={`font-medium text-sm transition-colors truncate ${
+                 entity.suspicionLevel === 'critical' ? 'text-red-100 font-bold' :
+                 entity.suspicionLevel === 'high' ? 'text-orange-100' :
                  'text-slate-200 group-hover:text-sky-400'
             }`}>{entity.name}</h4>
-            <p className="text-slate-500 text-xs">{entity.role}</p>
+            <p className="text-slate-500 text-xs truncate">{entity.role}</p>
           </div>
         </div>
-        {entity.suspicionLevel === 'critical' || entity.suspicionLevel === 'high' ? (
-           <AlertTriangle size={16} className={entity.suspicionLevel === 'critical' ? "text-red-500 animate-pulse" : "text-orange-500"} />
+        {entity.suspicionLevel === 'critical' ? (
+           <Flame size={18} className="text-red-500 animate-pulse drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] flex-shrink-0" />
+        ) : entity.suspicionLevel === 'high' ? (
+           <AlertOctagon size={16} className="text-orange-500 flex-shrink-0" />
         ) : null}
       </div>
-      <p className="text-slate-400 text-xs mt-2 leading-relaxed line-clamp-2">
+      <p className="text-slate-400 text-xs mt-2 leading-relaxed line-clamp-2 break-words">
         {entity.notes}
       </p>
       
       {entity.relatedLaw && (
-        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-red-300 bg-red-900/10 border border-red-900/30 px-2 py-1 rounded">
-          <Gavel size={10} />
+        <div className={`mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border ${
+            entity.suspicionLevel === 'critical' 
+            ? 'text-red-200 bg-red-950/60 border-red-500/40'
+            : 'text-red-300 bg-red-900/10 border-red-900/30'
+        }`}>
+          <Gavel size={10} className="flex-shrink-0" />
           <span className="truncate">{entity.relatedLaw}</span>
         </div>
       )}
@@ -240,8 +273,8 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
           <Share2 size={10} />
           {t.entities.visualize}
         </span>
-        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded flex items-center gap-1.5 ${getRiskStyles(entity.suspicionLevel)}`}>
-          {entity.suspicionLevel === 'critical' && <AlertOctagon size={10} />}
+        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded flex items-center gap-1.5 ${getRiskStyles(entity.suspicionLevel)}`}>
+          {getRiskIcon(entity.suspicionLevel, 10)}
           {getRiskLabel(entity.suspicionLevel)} {t.entities.risk}
         </span>
       </div>
@@ -252,25 +285,48 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
     <>
       <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-4 h-full overflow-hidden flex flex-col relative">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-slate-400 text-sm uppercase tracking-widest">{t.entities.title}</h3>
+            <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setActiveView('entities')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${
+                      activeView === 'entities' 
+                      ? 'bg-slate-700 text-white shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                    <List size={14} /> Entities
+                </button>
+                <button 
+                  onClick={() => setActiveView('connections')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${
+                      activeView === 'connections' 
+                      ? 'bg-slate-700 text-white shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                    <Network size={14} /> Links
+                </button>
+            </div>
           
           <div className="flex gap-2">
-             {/* Group By Control */}
-             <div className="flex items-center gap-2 bg-slate-900/50 rounded px-2 border border-slate-700 h-[26px]">
-                <Layers size={12} className="text-slate-500" />
-                <select 
-                    value={groupBy} 
-                    onChange={(e) => setGroupBy(e.target.value as any)}
-                    className="bg-transparent text-[10px] font-medium text-slate-300 outline-none border-none py-0 w-16 cursor-pointer uppercase"
-                >
-                    <option value="none" className="bg-slate-800 text-slate-400">None</option>
-                    <option value="type" className="bg-slate-800 text-slate-400">Type</option>
-                    <option value="role" className="bg-slate-800 text-slate-400">Role</option>
-                    <option value="suspicionLevel" className="bg-slate-800 text-slate-400">Risk</option>
-                </select>
-            </div>
+             {/* Group By Control (Only show in Entity View) */}
+             {activeView === 'entities' && (
+                <div className="hidden sm:flex items-center gap-2 bg-slate-900/50 rounded px-2 border border-slate-700 h-[26px]">
+                    <Layers size={12} className="text-slate-500" />
+                    <select 
+                        value={groupBy} 
+                        onChange={(e) => setGroupBy(e.target.value as any)}
+                        className="bg-transparent text-[10px] font-medium text-slate-300 outline-none border-none py-0 w-16 cursor-pointer uppercase"
+                    >
+                        <option value="none" className="bg-slate-800 text-slate-400">None</option>
+                        <option value="type" className="bg-slate-800 text-slate-400">Type</option>
+                        <option value="role" className="bg-slate-800 text-slate-400">Role</option>
+                        <option value="suspicionLevel" className="bg-slate-800 text-slate-400">Risk</option>
+                    </select>
+                </div>
+             )}
 
-            {onAddEntity && (
+            {onAddEntity && activeView === 'entities' && (
               <button 
                 onClick={() => setIsAdding(!isAdding)}
                 className={`text-xs flex items-center gap-1.5 px-2 py-1 rounded border transition-colors ${
@@ -280,7 +336,7 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
                 }`}
               >
                 {isAdding ? <X size={12} /> : <Plus size={12} />}
-                {isAdding ? t.entities.cancel : t.entities.add}
+                <span className="hidden sm:inline">{isAdding ? t.entities.cancel : t.entities.add}</span>
               </button>
             )}
             <button 
@@ -288,12 +344,12 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
                className="text-xs flex items-center gap-1.5 text-sky-400 hover:text-sky-300 transition-colors bg-sky-900/20 px-2 py-1 rounded border border-sky-800 hover:border-sky-600"
             >
                <Share2 size={12} />
-               {t.entities.graph}
+               <span className="hidden sm:inline">{t.entities.graph}</span>
             </button>
           </div>
         </div>
         
-        {isAdding && (
+        {isAdding && activeView === 'entities' && (
           <form onSubmit={handleSubmit} className="mb-4 bg-slate-900/80 p-3 rounded-lg border border-emerald-500/30 animate-fade-in max-h-[60vh] overflow-y-auto custom-scrollbar">
             <div className="space-y-2">
               <input 
@@ -309,9 +365,13 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
                 onChange={e => setNewType(e.target.value as EntityType)}
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white"
               >
-                  <option value="person">Person</option>
-                  <option value="company">Company</option>
-                  <option value="organization">Organization</option>
+                  <option value="person">Person (Private)</option>
+                  <option value="public_official">Public Official</option>
+                  <option value="company">Company (Private)</option>
+                  <option value="state_owned_enterprise">State Owned Enterprise (JP)</option>
+                  <option value="institution">Institution (Gov)</option>
+                  <option value="political_party">Political Party</option>
+                  <option value="ngo">NGO</option>
                   <option value="event">Event</option>
                   <option value="corruption_scheme">Corruption Scheme</option>
                   <option value="other">Other</option>
@@ -366,32 +426,57 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
         )}
 
         <div className="overflow-y-auto flex-1 pr-2 space-y-3 custom-scrollbar">
-          {groupedEntities ? (
-             Object.entries(groupedEntities).map(([groupKey, groupEntities]: [string, Entity[]]) => (
-                <div key={groupKey} className="mb-2">
-                    <div 
-                        onClick={() => toggleGroup(groupKey)}
-                        className="flex items-center justify-between p-2 bg-slate-900/80 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors mb-2 sticky top-0 z-10"
-                    >
-                        <div className="flex items-center gap-2">
-                            {expandedGroups[groupKey] ? <ChevronDown size={14} className="text-slate-400"/> : <ChevronRight size={14} className="text-slate-400"/>}
-                            <span className="text-xs font-bold text-slate-200 uppercase tracking-wide">
-                                {groupBy === 'type' ? groupKey.replace('_', ' ') : 
-                                 groupBy === 'suspicionLevel' ? `${getRiskLabel(groupKey)} Risk` : groupKey}
-                            </span>
-                            <span className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded-full border border-slate-700">{groupEntities.length}</span>
+          {activeView === 'entities' ? (
+              groupedEntities ? (
+                 Object.entries(groupedEntities).map(([groupKey, groupEntities]: [string, Entity[]]) => (
+                    <div key={groupKey} className="mb-2">
+                        <div 
+                            onClick={() => toggleGroup(groupKey)}
+                            className="flex items-center justify-between p-2 bg-slate-900/80 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors mb-2 sticky top-0 z-10"
+                        >
+                            <div className="flex items-center gap-2">
+                                {expandedGroups[groupKey] ? <ChevronDown size={14} className="text-slate-400"/> : <ChevronRight size={14} className="text-slate-400"/>}
+                                <span className="text-xs font-bold text-slate-200 uppercase tracking-wide">
+                                    {groupBy === 'type' ? groupKey.replace(/_/g, ' ') : 
+                                     groupBy === 'suspicionLevel' ? `${getRiskLabel(groupKey)} Risk` : groupKey}
+                                </span>
+                                <span className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded-full border border-slate-700">{groupEntities.length}</span>
+                            </div>
                         </div>
+                        
+                        {expandedGroups[groupKey] && (
+                            <div className="space-y-3 pl-2 border-l-2 border-slate-800 ml-2.5 animate-fade-in-down">
+                                {groupEntities.map((entity, idx) => renderEntityCard(entity, idx))}
+                            </div>
+                        )}
                     </div>
-                    
-                    {expandedGroups[groupKey] && (
-                        <div className="space-y-3 pl-2 border-l-2 border-slate-800 ml-2.5 animate-fade-in-down">
-                            {groupEntities.map((entity, idx) => renderEntityCard(entity, idx))}
-                        </div>
-                    )}
-                </div>
-             ))
+                 ))
+              ) : (
+                 entities.map((entity, idx) => renderEntityCard(entity, idx))
+              )
           ) : (
-             entities.map((entity, idx) => renderEntityCard(entity, idx))
+             /* CONNECTIONS LIST VIEW */
+             connections.length === 0 ? (
+                 <div className="text-center py-10 text-slate-500 italic">No connections recorded.</div>
+             ) : (
+                 <div className="space-y-2">
+                     {connections.map((c, i) => (
+                         <div key={i} className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-800 rounded-lg hover:border-sky-500/30 transition-all text-sm group">
+                             <div className="flex items-center gap-3 w-full min-w-0">
+                                 <div className="font-bold text-sky-100 truncate flex-1 text-right min-w-0">{c.from}</div>
+                                 <div className="flex flex-col items-center flex-shrink-0 w-24">
+                                     <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{c.type}</span>
+                                     <div className="flex items-center text-slate-600">
+                                         <div className="h-px bg-slate-700 w-full"></div>
+                                         <ArrowRight size={12} className="mx-1" />
+                                     </div>
+                                 </div>
+                                 <div className="font-bold text-sky-100 truncate flex-1 min-w-0">{c.to}</div>
+                             </div>
+                         </div>
+                     ))}
+                 </div>
+             )
           )}
         </div>
       </div>
@@ -399,7 +484,7 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
       {/* Entity Details Modal */}
       {viewingEntity && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={() => setViewingEntity(null)}>
-            <div className={`bg-slate-900 border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[85vh] ${
+            <div className={`bg-slate-900 border w-full max-w-md w-[calc(100%-2rem)] rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[85vh] ${
                 viewingEntity.suspicionLevel === 'critical' ? 'border-red-900/50 shadow-red-900/20' :
                 viewingEntity.suspicionLevel === 'high' ? 'border-orange-900/50 shadow-orange-900/20' :
                 'border-slate-700'
@@ -411,13 +496,13 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
                                 {getEntityIcon(viewingEntity.type, 18)}
                              </div>
                              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                                {viewingEntity.type ? viewingEntity.type.replace('_', ' ') : 'Entity'}
+                                {viewingEntity.type ? viewingEntity.type.replace(/_/g, ' ') : 'Entity'}
                              </span>
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-1">
+                        <h3 className="text-xl font-bold text-white mb-1 break-words">
                              {viewingEntity.name}
                         </h3>
-                        <p className="text-slate-400 text-sm">{viewingEntity.role}</p>
+                        <p className="text-slate-400 text-sm break-words">{viewingEntity.role}</p>
                     </div>
                     <button onClick={() => setViewingEntity(null)} className="text-slate-500 hover:text-white transition-colors bg-slate-800 p-1.5 rounded-full hover:bg-slate-700">
                         <X size={20} />
@@ -429,37 +514,45 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
                     {/* Metadata Section - Adaptive based on type */}
                     <div className="bg-slate-800/30 rounded-lg p-3 border border-slate-800 grid grid-cols-2 gap-3">
                          {/* Founding Date / DOB */}
-                         {(viewingEntity.type === 'company' || viewingEntity.type === 'organization' || viewingEntity.type === 'person') && (
-                            <div className="flex flex-col gap-1">
+                         {(viewingEntity.type === 'company' || viewingEntity.type === 'state_owned_enterprise' || viewingEntity.type === 'organization' || viewingEntity.type === 'person' || viewingEntity.type === 'public_official') && (
+                            <div className="flex flex-col gap-1 min-w-0">
                                 <span className="text-[10px] uppercase text-slate-500 font-bold flex items-center gap-1">
                                     <Calendar size={10} /> 
-                                    {viewingEntity.type === 'person' ? "Date of Birth / Public" : "Founded"}
+                                    {(viewingEntity.type === 'person' || viewingEntity.type === 'public_official') ? "Date of Birth / Public" : "Founding Date"}
                                 </span>
-                                <span className="text-sm text-slate-200 font-mono">
-                                    {viewingEntity.metadata?.foundingDate || "N/A"}
-                                </span>
+                                <input 
+                                    type="text" 
+                                    className="bg-transparent border-b border-slate-700 focus:border-sky-500 outline-none text-sm text-slate-200 font-mono w-full py-0.5"
+                                    value={viewingEntity.metadata?.foundingDate || ""}
+                                    onChange={(e) => handleUpdateMetadata('foundingDate', e.target.value)}
+                                    placeholder="YYYY-MM-DD"
+                                />
                             </div>
                          )}
 
                          {/* Last Update */}
-                         <div className="flex flex-col gap-1">
+                         <div className="flex flex-col gap-1 min-w-0">
                              <span className="text-[10px] uppercase text-slate-500 font-bold flex items-center gap-1">
                                  <Clock size={10} /> {t.entities.modal.modified}
                              </span>
-                             <span className="text-sm text-slate-200 font-mono">
+                             <span className="text-sm text-slate-200 font-mono truncate">
                                  {viewingEntity.metadata?.lastRegistryUpdate || "Unknown"}
                              </span>
                          </div>
 
                          {/* Registration / ID */}
-                         {(viewingEntity.type === 'company' || viewingEntity.type === 'organization') && (
+                         {(viewingEntity.type === 'company' || viewingEntity.type === 'state_owned_enterprise' || viewingEntity.type === 'organization') && (
                             <div className="flex flex-col gap-1 col-span-2 pt-2 border-t border-slate-700/50">
                                 <span className="text-[10px] uppercase text-slate-500 font-bold flex items-center gap-1">
                                     <Hash size={10} /> {t.entities.modal.registryId}
                                 </span>
-                                <span className="text-sm text-white font-mono tracking-wider">
-                                    {viewingEntity.metadata?.registrationNumber || "Not Listed"}
-                                </span>
+                                <input 
+                                    type="text"
+                                    className="bg-transparent border-b border-slate-700 focus:border-sky-500 outline-none text-sm text-white font-mono tracking-wider w-full py-0.5"
+                                    value={viewingEntity.metadata?.registrationNumber || ""}
+                                    onChange={(e) => handleUpdateMetadata('registrationNumber', e.target.value)}
+                                    placeholder="Enter MB / PIB"
+                                />
                             </div>
                          )}
                          
@@ -469,7 +562,7 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
                                 <span className="text-[10px] uppercase text-slate-500 font-bold flex items-center gap-1">
                                     <MapPin size={10} /> Location
                                 </span>
-                                <span className="text-sm text-white">
+                                <span className="text-sm text-white break-words">
                                     {viewingEntity.metadata.location}
                                 </span>
                             </div>
@@ -511,7 +604,7 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
 
                     <div>
                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">{t.entities.modal.notes}</label>
-                         <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                         <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap break-words">
                             {viewingEntity.notes || t.entities.modal.noNotes}
                          </div>
                     </div>
@@ -541,20 +634,23 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
                                         href={doc.url} 
                                         target="_blank" 
                                         rel="noopener noreferrer"
-                                        className="flex items-center justify-between p-3 bg-slate-800/50 border border-slate-700 hover:border-sky-500/50 hover:bg-slate-800 rounded-lg group transition-all"
+                                        className={`flex items-center justify-between p-3 bg-slate-800/50 border border-slate-700 rounded-lg group transition-all ${
+                                            doc.url ? 'hover:border-sky-500/50 hover:bg-slate-800 cursor-pointer' : 'opacity-75 cursor-default'
+                                        }`}
+                                        onClick={e => !doc.url && e.preventDefault()}
                                     >
-                                        <div className="flex items-center gap-3 overflow-hidden">
-                                            <div className="bg-slate-900 p-2 rounded text-slate-400 group-hover:text-sky-400 transition-colors">
+                                        <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                                            <div className="bg-slate-900 p-2 rounded text-slate-400 group-hover:text-sky-400 transition-colors flex-shrink-0">
                                                 {doc.type === 'registry' ? <Building2 size={14}/> :
                                                  doc.type === 'news' ? <Share2 size={14}/> :
                                                  <FileText size={14}/>}
                                             </div>
-                                            <div className="flex flex-col overflow-hidden">
+                                            <div className="flex flex-col overflow-hidden min-w-0">
                                                 <span className="text-sm text-slate-200 font-medium truncate">{doc.title}</span>
                                                 <span className="text-[10px] text-slate-500 uppercase">{doc.type} {doc.date && `• ${doc.date}`}</span>
                                             </div>
                                         </div>
-                                        {doc.url && <ExternalLink size={14} className="text-slate-500 group-hover:text-sky-400 flex-shrink-0" />}
+                                        {doc.url && <ExternalLink size={14} className="text-slate-500 group-hover:text-sky-400 flex-shrink-0 ml-2" />}
                                     </a>
                                 ))}
                             </div>
@@ -563,11 +659,14 @@ const EntityList: React.FC<EntityListProps> = React.memo(({ entities, connection
                 </div>
 
                 <div className="p-6 border-t border-slate-800 bg-slate-950/30">
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3">
                         {onInvestigate && (
                             <button
                                 onClick={() => {
-                                    onInvestigate(viewingEntity.name);
+                                    const query = viewingEntity.relatedLaw 
+                                        ? `Investigate ${viewingEntity.name} and analyze legal precedents regarding ${viewingEntity.relatedLaw}`
+                                        : viewingEntity.name;
+                                    onInvestigate(query);
                                     setViewingEntity(null);
                                 }}
                                 className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20"

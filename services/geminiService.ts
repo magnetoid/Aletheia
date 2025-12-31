@@ -9,16 +9,48 @@ if (!apiKey) {
 
 const ai = new GoogleGenAI({ apiKey: apiKey || "" });
 
-// --- Advanced LRU Cache Implementation ---
-class CacheManager<T> {
+// --- Advanced LRU Persistent Cache Implementation ---
+class PersistentCacheManager<T> {
   private cache: Map<string, { data: T; timestamp: number }>;
   private readonly maxSize: number;
   private readonly ttl: number;
+  private readonly storageKey: string;
 
-  constructor(maxSize: number = 50, ttl: number = 1000 * 60 * 60) { // 50 items, 1 hour TTL
+  constructor(storageKey: string = 'aletheia_cache_v2', maxSize: number = 20, ttl: number = 1000 * 60 * 60 * 24) { // 20 items, 24 hour TTL
     this.cache = new Map();
     this.maxSize = maxSize;
     this.ttl = ttl;
+    this.storageKey = storageKey;
+    this.loadFromStorage();
+  }
+
+  private loadFromStorage() {
+    try {
+      const stored = localStorage.getItem(this.storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          // Verify TTL on load
+          const now = Date.now();
+          parsed.forEach(([key, value]) => {
+             if (now - value.timestamp < this.ttl) {
+                 this.cache.set(key, value);
+             }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load cache from storage", e);
+    }
+  }
+
+  private saveToStorage() {
+    try {
+      const entries = Array.from(this.cache.entries());
+      localStorage.setItem(this.storageKey, JSON.stringify(entries));
+    } catch (e) {
+      console.warn("Failed to save cache to storage (likely quota exceeded)", e);
+    }
   }
 
   get(key: string): T | null {
@@ -29,12 +61,14 @@ class CacheManager<T> {
     // Check TTL
     if (Date.now() - entry.timestamp > this.ttl) {
       this.cache.delete(key);
+      this.saveToStorage();
       return null;
     }
 
     // LRU Policy: Refresh the item's position by re-inserting it
     this.cache.delete(key);
     this.cache.set(key, entry);
+    this.saveToStorage();
 
     return entry.data;
   }
@@ -53,14 +87,16 @@ class CacheManager<T> {
     }
 
     this.cache.set(key, { data, timestamp: Date.now() });
+    this.saveToStorage();
   }
 
   clear(): void {
     this.cache.clear();
+    localStorage.removeItem(this.storageKey);
   }
 }
 
-const analysisCache = new CacheManager<AnalysisResult>();
+const analysisCache = new PersistentCacheManager<AnalysisResult>();
 
 // Function to fetch from Serbia Open Data Portal (CKAN API)
 const searchOpenDataPortal = async (query: string): Promise<string> => {
@@ -92,12 +128,35 @@ const searchOpenDataPortal = async (query: string): Promise<string> => {
         return `DATASET TITLE: ${ds.title}\nDESCRIPTION: ${description}\nRESOURCES:\n${resources}`;
     }).join('\n\n');
 
-    return `\n\n*** OFFICIAL OPEN DATA PORTAL (data.gov.rs) API RESULTS ***\nThe following structured datasets were found directly via the Government's Open Data API. Use these specific resource URLs and descriptions to ground your findings regarding public spending, procurement, or entity registration:\n\n${datasets}\n\n*******************************************************\n`;
+    return `\n\n*** OFFICIAL OPEN DATA PORTAL (data.gov.rs) API RESULTS ***\nThe following structured datasets were found directly via the Government's Open Data API. You MUST use these official records to verify claims made by other sources:\n\n${datasets}\n\n*******************************************************\n`;
   } catch (error) {
     console.warn("Failed to fetch from Open Data Portal API", error);
     return "";
   }
 };
+
+/**
+ * Exponential backoff retry mechanism to handle 429 Rate Limit errors
+ */
+async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    // Check for 429 status code in various error structures
+    const isRateLimit = 
+      error?.status === 429 || 
+      error?.code === 429 || 
+      (error?.message && error.message.includes('429')) ||
+      (error?.message && error.message.includes('RESOURCE_EXHAUSTED'));
+
+    if (retries > 0 && isRateLimit) {
+      console.warn(`Rate limit hit. Retrying in ${delay}ms... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryWithBackoff(fn, retries - 1, delay * 2); // Exponential backoff
+    }
+    throw error;
+  }
+}
 
 // Schema for the structured analysis report
 const reportSchema = {
@@ -105,9 +164,9 @@ const reportSchema = {
   properties: {
     target: { type: Type.STRING, description: "The main subject of the investigation." },
     targetImage: { type: Type.STRING, description: "A valid public URL to a profile image or logo of the target (e.g., from Wikipedia, Istinomer, or other public sources) if found." },
-    riskScore: { type: Type.NUMBER, description: "A calculated corruption risk score from 0 to 100." },
+    riskScore: { type: Type.NUMBER, description: "A calculated corruption risk score from 0 to 100 based on verified red flags." },
     riskLevel: { type: Type.STRING, enum: ["Safe", "Low", "Moderate", "High", "Critical"] },
-    summary: { type: Type.STRING, description: "Executive summary of the investigation." },
+    summary: { type: Type.STRING, description: "Executive summary of the investigation, highlighting only verified facts." },
     keyFindings: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
@@ -148,8 +207,8 @@ const reportSchema = {
     financialAnalysis: {
       type: Type.OBJECT,
       properties: {
-        estimatedNetWorth: { type: Type.STRING, description: "Estimated wealth or 'Unknown'" },
-        declaredIncome: { type: Type.STRING, description: "Officially declared income or 'Unknown'" },
+        estimatedNetWorth: { type: Type.STRING, description: "Estimated wealth or 'Unknown' if not verified." },
+        declaredIncome: { type: Type.STRING, description: "Officially declared income (Agencija za sprečavanje korupcije) or 'Unknown'." },
         assetDiscrepancies: { type: Type.ARRAY, items: { type: Type.STRING }, description: "List of discrepancies between income and lifestyle/assets." },
         offshoreConnections: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Mentions of tax havens, shell companies, or leaks (Pandora/Panama)." }
       },
@@ -226,7 +285,11 @@ const reportSchema = {
         type: Type.OBJECT,
         properties: {
           name: { type: Type.STRING },
-          type: { type: Type.STRING, enum: ['person', 'company', 'organization', 'event', 'corruption_scheme', 'other'], description: "Classify the entity." },
+          type: { 
+              type: Type.STRING, 
+              enum: ['person', 'public_official', 'company', 'state_owned_enterprise', 'institution', 'political_party', 'ngo', 'organization', 'event', 'corruption_scheme', 'other'], 
+              description: "Classify the entity accurately." 
+          },
           role: { type: Type.STRING },
           suspicionLevel: { type: Type.STRING, enum: ["low", "medium", "high", "critical"] },
           notes: { type: Type.STRING },
@@ -278,12 +341,12 @@ const reportSchema = {
 export const analyzeTarget = async (query: string, sources: DataSource[], language: 'en' | 'sr' = 'sr'): Promise<AnalysisResult> => {
   try {
     const activeSourcesIds = sources.filter(s => s.active).map(s => s.id).sort().join(',');
-    const cacheKey = `analyze:${query.toLowerCase().trim()}:${language}:${activeSourcesIds}`;
+    const cacheKey = `analyze_v2:${query.toLowerCase().trim()}:${language}:${activeSourcesIds}`;
 
     // Check LRU cache
     const cachedResult = analysisCache.get(cacheKey);
     if (cachedResult) {
-        console.log("Serving from internal LRU cache:", cacheKey);
+        console.log("Serving from internal Persistent LRU cache:", cacheKey);
         return cachedResult;
     }
 
@@ -292,16 +355,12 @@ export const analyzeTarget = async (query: string, sources: DataSource[], langua
     
     const activeSources = sources.filter(s => s.active);
     const sourceInstructions = activeSources.length > 0 
-      ? `PRIORITY: You must prioritize and cross-reference information from the following trusted investigative databases and outlets: 
-         ${activeSources.map(s => `- ${s.name} (${s.url})`).join('\n')}
+      ? `TRUSTED KNOWLEDGE GRAPH (INDEX): 
+         You must prioritize and restrict your search primarily to the following indexed investigative journalism domains. 
+         Treat these as your primary database of verified facts:
+         ${activeSources.map(s => `- ${s.name} (site: ${s.url})`).join('\n')}
          
-         SPECIFICALLY CHECK THESE INTEGRITY SOURCES FOR PEOPLE PROFILES:
-         - birodi.rs (Bureau for Social Research)
-         - istinomer.rs (Truth-o-meter)
-         - wikipedia.org
-         - eKatastar (Republic Geodetic Authority)
-         
-         Use Google Search to specifically query these domains (e.g. site:istinomer.rs "${query}") along with general queries.`
+         INSTRUCTION: When searching, append "site:domain.rs" to your internal search queries for each of these high-value targets to ensure deep indexing.`
       : "";
 
     const languageInstruction = language === 'sr' 
@@ -311,76 +370,79 @@ export const analyzeTarget = async (query: string, sources: DataSource[], langua
     // Wait for open data API results
     const openDataContext = await openDataPromise;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
-      contents: `Perform a deep forensic investigative analysis on: "${query}" within the context of Serbia and the Western Balkans.
-      
-      ${sourceInstructions}
-      
-      ${openDataContext}
+    // Use retry mechanism for the main AI call
+    const response = await retryWithBackoff(async () => {
+        return await ai.models.generateContent({
+            model: "gemini-3-pro-preview",
+            contents: `Execute a strict DEEP FORENSIC INVESTIGATION & VERIFICATION ALGORITHM on: "${query}" (Serbia/Balkans Context).
+            
+            SCOPE: 20 YEARS (2004 - Present). You MUST dig into historical records, not just recent news.
+            
+            ${sourceInstructions}
+            
+            ${openDataContext}
 
-      ${languageInstruction}
+            ${languageInstruction}
 
-      CORE OBJECTIVES:
-      1. **IMAGE SOURCING**:
-         - Attempt to find a public URL for an image of the target (e.g. from Wikimedia, Istinomer, official profiles). Include this in the 'targetImage' field.
+            --- VERIFICATION ALGORITHM (MANDATORY) ---
+            
+            PHASE 1: SOURCE TIERING & WEIGHTING
+            - TIER 1 (Official): APR (Business Registers Agency), Katastar (RGZ), Agencija za sprečavanje korupcije, Courts (Sudovi), data.gov.rs. -> Weight: 100% (Accept as Fact)
+            - TIER 2 (Investigative): KRIK, CINS, BIRN, Insajder, N1, Nova, Vreme, NIN, Radar, VOICE, Istinomer. -> Weight: 80% (High Confidence)
+            - TIER 3 (Media/Tabloids): Informer, Kurir, Alo, General Blogs. -> Weight: 20% (Treat as Rumor/Unverified)
+            
+            PHASE 2: DATA TRIANGULATION
+            - A "fact" requires: 1 Official Source OR 2 Independent Investigative Sources.
+            - If verified by Tier 1 source: Mark as CONFIRMED.
+            - If only in Tier 3: Exclude or label as "Alleged".
+            
+            PHASE 3: HISTORICAL DEPTH (20-YEAR LOOKBACK)
+            - Check for "Brisana preduzeća" (Dissolved companies) in APR history.
+            - Trace "Preletači" (Party switching) history. Was the target active in previous regimes (DS, DSS, G17+, SRS)?
+            - Investigate privatization deals from 2000s.
+            - Look for archived scandals (aferu) that may have been buried.
+            - Correlate business success with government administration changes.
 
-      2. **FINANCIAL FORENSICS**:
-         - Compare estimated net worth/lifestyle vs. officially declared income. Look for discrepancies.
-         - Search for connections to offshore tax havens (BVI, Cyprus, Delaware) or leaks (Panama/Pandora Papers).
-         - Identify unexplained property ownership or assets held by family members (proxies).
-      
-      3. **PROCUREMENT AUDIT**:
-         - Analyze public tenders (javne nabavke). Look for "single bidder" contracts.
-         - Identify contracts awarded via "negotiated procedure without publication of contract notice".
-         - Check for connections between the target and the companies winning these tenders (conflict of interest).
-      
-      4. **NETWORK MAPPING & ENTITY METADATA**:
-         - Map out the network of connected entities.
-         - **STRICT CLASSIFICATION**: You MUST classify every entity as one of: 'person', 'company', 'organization', 'event', 'corruption_scheme'.
-         - 'corruption_scheme' entities should represent abstract concepts like "Jovanjica Affair" or "Krušik Scandal".
-         - 'event' entities should represent key meetings or incidents.
-         - **CRITICAL**: For 'company' entities, find Registration Number (MB/PIB) and Founding Date. For 'person' entities, find DOB or first public appearance.
-         - Include links to official registry entries or key news articles (as 'documents').
-      
-      5. **LEGAL ANALYSIS**: 
-         - Cross-reference findings with specific Serbian legal frameworks.
-         - Law on Public Procurement (Zakon o javnim nabavkama)
-         - Law on Prevention of Corruption (Zakon o sprečavanju korupcije)
-         - Criminal Code (Krivični zakonik)
+            PHASE 4: HALLUCINATION PREVENTION (NULL STATES)
+            - If you cannot find a Company ID (MB), Tax ID (PIB), or exact Date: Output "Unknown". DO NOT GUESS NUMBERS.
+            - If a specific law violation is not clear, do not invent an article number.
+            - For "estimatedNetWorth", if no data exists, state "Unknown".
 
-      6. **CORRUPTION TYPOLOGY SCORING**:
-         - Score the target (0-10) on the following axes based on evidence:
-           - Nepotism: Favoring relatives/friends for positions or contracts.
-           - Procurement Fraud: Rigging tenders, inflating prices.
-           - Embezzlement: Theft of public resources.
-           - Shell Companies: Using complex structures to hide ownership.
-           - Political Influence: Abusing power for personal gain.
-      
-      7. **INVESTIGATIVE LEADS**:
-         - Provide 3-5 concrete, actionable next steps for an investigator.
-         - Examples: "Request bank records for entity X", "Verify land registry ownership for Plot 123 in Katastar", "Check cross-border entries for Person Y".
+            PHASE 5: ENTITY CLASSIFICATION
+            - Strictly categorize: 'person' vs 'public_official' vs 'company'.
+            - For Public Officials: Search specifically for "Imovinski karton" (Asset Declaration) history.
 
-      8. **STRATEGIC ADVICE**:
-         - **Safety Protocols**: Advise the investigator on physical and digital security risks associated with this specific target.
-         - **Legal Strategy**: Suggest legal avenues for obtaining more info (FOIA requests) or pitfalls to avoid (defamation suits).
-         - **Public Interest**: Suggest how to frame the narrative for maximum public impact.
-      
-      9. **REAL ESTATE / KATASTAR**:
-         - Specifically search for declared assets (Imovinski karton) or news reports mentioning real estate.
-         - If parcel numbers (Broj parcele) or Municipalities (Katastarska opština) are mentioned, extract them into the 'properties' array.
-      
-      10. **TIMELINE**: Construct a detailed timeline with "relatedLaw" citations where applicable.
-      
-      Be objective, fact-based, and forensic in your tone. 
-      
-      If no corruption is found, state that clearly in the summary and assign a low risk score.`,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: reportSchema,
-        thinkingConfig: { thinkingBudget: 32768 }, 
-      },
+            --- OUTPUT REQUIREMENTS ---
+
+            1. **IMAGE**: Attempt to find a valid URL for the target (Wikimedia/Istinomer).
+            
+            2. **FINANCIALS**: 
+                - Check declared income vs lifestyle over time.
+                - Flag offshore zones (BVI, Cyprus, UAE).
+
+            3. **PROCUREMENT**: 
+                - Check for "Single Bidder" (Jedan ponuđač) contracts.
+                - Check for "Negotiated Procedure" (Pregovarački postupak).
+                - Analyze historical tender wins vs government changes.
+
+            4. **LEGAL**: 
+                - Cite *specific* articles of: Zakon o javnim nabavkama, Krivični zakonik, Zakon o sprečavanju korupcije.
+                - IF query mentions a law, find PRECEDENTS.
+
+            5. **SCORING**:
+                - Calculate Risk Score (0-100) based ONLY on verified Tier 1/Tier 2 findings.
+
+            6. **TIMELINE**:
+                - Build a chronological sequence of events spanning up to 20 years. Use exact dates where possible.
+
+            Be cynical, precise, and purely evidence-based.`,
+            config: {
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: reportSchema,
+                thinkingConfig: { thinkingBudget: 32768 }, 
+            },
+        });
     });
 
     const text = response.text;
@@ -436,4 +498,57 @@ export const createInvestigationChat = (report: AnalysisReport, language: 'en' |
       systemInstruction: contextInstruction,
     }
   });
+};
+
+/**
+ * Generates a specific legal document based on the analysis.
+ */
+export const generateLegalDocument = async (
+    report: AnalysisReport, 
+    docType: 'foi' | 'complaint' | 'preservation', 
+    language: 'en' | 'sr'
+  ): Promise<string> => {
+    
+    const instructions = {
+        foi: `Draft a formal "Zahtev za pristup informacijama od javnog značaja" (Freedom of Information Request) to the relevant Serbian institution. 
+              Focus on requesting documents related to the "${report.target}" case, specifically the suspicious tenders and asset discrepancies found. 
+              Cite the Law on Free Access to Information of Public Importance.`,
+        
+        complaint: `Draft a "Krivična prijava" (Criminal Complaint) to the Public Prosecutor (Tužilaštvo). 
+                    Summarize the evidence against "${report.target}" based on the analysis findings (procurement fraud, tax evasion, etc.).
+                    Cite specific articles of the Criminal Code (Krivični zakonik) and Law on Public Procurement.`,
+        
+        preservation: `Draft a "Zahtev za očuvanje dokaza" (Evidence Preservation Letter) to a relevant institution or company. 
+                       Demand they preserve all digital and physical records related to "${report.target}" and specific tender IDs mentioned in the report.`
+    };
+
+    const prompt = `
+        ACT AS: Expert Legal Counsel in Serbian Anti-Corruption Law.
+        TASK: ${instructions[docType]}
+        
+        CONTEXT DATA:
+        Target: ${report.target}
+        Suspicious Findings: ${report.keyFindings.join("; ")}
+        Legal Violations: ${report.legalAnalysis.join("; ")}
+        Tenders: ${JSON.stringify(report.procurementAnalysis.suspiciousTenders)}
+        
+        OUTPUT FORMAT:
+        - Plain text, formatted as a formal legal letter.
+        - Include placeholders like [DATUM], [INSTITUCIJA] where specific info is missing.
+        - ${language === 'sr' ? 'Write strictly in Serbian (Latin script).' : 'Write in English.'}
+        - Tone: Professional, authoritative, legally precise.
+    `;
+
+    // Wrapped in retry for robustness
+    const response = await retryWithBackoff(async () => {
+        return await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: {
+                temperature: 0.3, // Low temperature for consistent legal drafting
+            }
+        });
+    });
+
+    return response.text || "Failed to generate document.";
 };

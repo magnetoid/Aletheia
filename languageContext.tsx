@@ -15,6 +15,82 @@ export const translations = {
       subtitle: "Deep investigative AI research into potential corruption and affairs using Serbian legal frameworks.",
       try: "Try"
     },
+    sidebar: {
+      platform: "Platform",
+      research: "Research",
+      admin: "Admin Console",
+      knowledge: "Knowledge Base",
+      people: "People & Entities",
+      globalTimeline: "Global Timeline",
+      mindMap: "Connection Mind Map",
+      activeCase: "Active Investigation",
+      signOut: "Sign Out"
+    },
+    userDashboard: {
+      titleSuffix: "Research",
+      subtitle: "Deep forensic analysis of public records, tenders, and corruption networks.",
+      recent: "Recent Investigations",
+      empty: "No investigations found. Start a new research above.",
+      query: "Query"
+    },
+    admin: {
+      title: "System Administration",
+      subtitle: "Global oversight and configuration.",
+      audit: "Audit Logs",
+      config: "Config",
+      status: "System Status",
+      operational: "Operational",
+      intelligence: "Data Intelligence",
+      activeSources: "active sources",
+      manage: "Manage Sources",
+      quota: "API Quota",
+      threats: "Threats Flags",
+      users: "User Management",
+      activity: "Live Activity",
+      role: "Role",
+      lastActive: "Last Active"
+    },
+    peopleDb: {
+        title: "People & Entities",
+        search: "Search database...",
+        noResults: "No entities found.",
+        bio: "Biography / Notes",
+        metadata: "Metadata",
+        linked: "Linked Cases",
+        runAnalysis: "Run Extended Analysis",
+        reg: "Reg. Number",
+        born: "Founded/Born"
+    },
+    globalTimeline: {
+        title: "Global Event Timeline",
+        subtitle: "Master chronological record across all investigations",
+        empty: "No timeline events recorded in saved cases."
+    },
+    legalTools: {
+        title: "Legal Generator",
+        subtitle: "Automated Drafting Engine",
+        desc: "Select a document type to auto-draft formal legal requests based on the current investigation findings.",
+        foi: "FOI Request",
+        foiSub: "Request for Information",
+        complaint: "Criminal Complaint",
+        complaintSub: "Public Prosecutor",
+        preservation: "Preservation Letter",
+        preservationSub: "Evidence Preservation",
+        context: "Context Loaded",
+        drafting: "Drafting",
+        preview: "Document Preview",
+        loading: "Drafting legal document based on forensic data...",
+        select: "Select a document type to generate a draft."
+    },
+    propertyRegistry: {
+        new: "New Property Record",
+        save: "Save Property Record",
+    },
+    timelineView: {
+        add: "Add Event",
+        new: "New Timeline Entry",
+        save: "Save Timeline Event"
+    },
     search: {
       placeholder: "Enter a politician, company, or tender ID...",
       button: "Investigate",
@@ -43,7 +119,8 @@ export const translations = {
       notes: "Case Notes",
       assistant: "AI Co-pilot",
       advices: "Strategy & Advice",
-      assets: "Assets & Katastar"
+      assets: "Assets & Katastar",
+      legal: "Legal Tools"
     },
     overview: {
       summary: "Executive Summary",
@@ -178,6 +255,82 @@ export const translations = {
       subtitle: "Duboka AI istraga o potencijalnoj korupciji i aferama koristeći pravne okvire Srbije.",
       try: "Probaj"
     },
+    sidebar: {
+      platform: "Platforma",
+      research: "Istraživanje",
+      admin: "Admin Konzola",
+      knowledge: "Baza Znanja",
+      people: "Ljudi i Entiteti",
+      globalTimeline: "Globalna Vremenska Linija",
+      mindMap: "Mreža Veza (Mind Map)",
+      activeCase: "Aktivna Istraga",
+      signOut: "Odjavi se"
+    },
+    userDashboard: {
+      titleSuffix: "Istraživanje",
+      subtitle: "Duboka forenzička analiza javnih zapisa, tendera i korupcijskih mreža.",
+      recent: "Nedavne Istrage",
+      empty: "Nema pronađenih istraga. Započnite novo istraživanje iznad.",
+      query: "Upit"
+    },
+    admin: {
+      title: "Sistemska Administracija",
+      subtitle: "Globalni nadzor i konfiguracija.",
+      audit: "Revizija",
+      config: "Konfig",
+      status: "Status Sistema",
+      operational: "Operativan",
+      intelligence: "Podaci i Izvori",
+      activeSources: "aktivnih izvora",
+      manage: "Upravljaj Izvorima",
+      quota: "API Kvota",
+      threats: "Zastavice Pretnji",
+      users: "Upravljanje Korisnicima",
+      activity: "Aktivnost Uživo",
+      role: "Uloga",
+      lastActive: "Aktivnost"
+    },
+    peopleDb: {
+        title: "Ljudi i Entiteti",
+        search: "Pretraži bazu...",
+        noResults: "Nema pronađenih entiteta.",
+        bio: "Biografija / Beleške",
+        metadata: "Metapodaci",
+        linked: "Povezani Slučajevi",
+        runAnalysis: "Pokreni Proširenu Analizu",
+        reg: "Reg. Broj",
+        born: "Osnovano/Rođen"
+    },
+    globalTimeline: {
+        title: "Globalna Vremenska Linija",
+        subtitle: "Glavni hronološki zapis kroz sve istrage",
+        empty: "Nema zabeleženih događaja u sačuvanim slučajevima."
+    },
+    legalTools: {
+        title: "Pravni Generator",
+        subtitle: "Automatska Izrada Dokumenata",
+        desc: "Izaberite tip dokumenta za automatsku izradu formalnih pravnih zahteva na osnovu nalaza istrage.",
+        foi: "Zahtev za Informacije",
+        foiSub: "Pristup informacijama od javnog značaja",
+        complaint: "Krivična Prijava",
+        complaintSub: "Javno Tužilaštvo",
+        preservation: "Zahtev za Očuvanje",
+        preservationSub: "Očuvanje Dokaza",
+        context: "Učitan Kontekst",
+        drafting: "Izrada",
+        preview: "Pregled Dokumenta",
+        loading: "Izrada pravnog dokumenta na osnovu forenzičkih podataka...",
+        select: "Izaberite tip dokumenta za generisanje nacrta."
+    },
+    propertyRegistry: {
+        new: "Novi Zapis o Imovini",
+        save: "Sačuvaj Zapis",
+    },
+    timelineView: {
+        add: "Dodaj Događaj",
+        new: "Novi Unos u Vremensku Liniju",
+        save: "Sačuvaj Događaj"
+    },
     search: {
       placeholder: "Unesite političara, firmu ili broj tendera...",
       button: "Istraži",
@@ -206,7 +359,8 @@ export const translations = {
       notes: "Beleške",
       assistant: "AI Ko-pilot",
       advices: "Strategija i Saveti",
-      assets: "Imovina i Katastar"
+      assets: "Imovina i Katastar",
+      legal: "Pravni Alati"
     },
     overview: {
       summary: "Izvršni Sažetak",
@@ -340,6 +494,7 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Default to Serbian
   const [language, setLanguage] = useState<Language>('sr');
 
   return (
